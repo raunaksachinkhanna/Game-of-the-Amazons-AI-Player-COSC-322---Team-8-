@@ -96,8 +96,8 @@ public class COSC322Test extends GamePlayer {
 
             minimaxAI = new Minimax(AI, myPlayer);
 
-            // White starts first
-            if (myPlayer == AI_AmazonGame.WHITE) {
+            // Black starts first
+            if (myPlayer == AI_AmazonGame.BLACK) {
                 System.out.println("Making opening move as WHITE...");
                 sendBestMove();
             }
@@ -239,4 +239,5 @@ public class COSC322Test extends GamePlayer {
         System.out.println("Connecting to game server as " + userName + "..."); // DEBUG
         gameClient = new GameClient(userName, passwd, this);
     }
+
 }
