@@ -1,7 +1,7 @@
 package ubc.cosc322;
 
 import java.util.ArrayList;
-import java.util.HashMap; // ADDED: needed to update GUI for our own move
+import java.util.HashMap;
 import java.util.Map;
 
 import ygraph.ai.smartfox.games.BaseGameGUI;
@@ -21,18 +21,19 @@ public class COSC322Test extends GamePlayer {
     private AI_AmazonGame AI;
     private Minimax minimaxAI;
 
-    // 1 = WHITE, 2 = BLACK
     private int myPlayer = 0;
 
-    /**
-     * Main method
-     */
-    public static void main(String[] args) {
-        // CHANGED: safe fallback arguments so Eclipse won't crash if args are missing
-        String userName = (args.length > 0) ? args[0] : "player1";
-        String passwd   = (args.length > 1) ? args[1] : "pass";
+    
+  
+    private static final int STARTING_PLAYER = AI_AmazonGame.BLACK;
 
-        System.out.println("Starting client with username = " + userName); // DEBUG
+    private AI_AmazonGame.Move lastSentMove = null;
+
+    public static void main(String[] args) {
+        String userName = (args.length > 0) ? args[0] : "player1";
+        String passwd = (args.length > 1) ? args[1] : "pass";
+
+        System.out.println("Starting client with username = " + userName);
 
         COSC322Test player = new COSC322Test(userName, passwd);
 
@@ -45,9 +46,6 @@ public class COSC322Test extends GamePlayer {
         });
     }
 
-    /**
-     * Constructor
-     */
     public COSC322Test(String userName, String passwd) {
         this.userName = userName;
         this.passwd = passwd;
@@ -55,13 +53,13 @@ public class COSC322Test extends GamePlayer {
         this.AI = new AI_AmazonGame();
         this.gamegui = new BaseGameGUI(this);
 
-        System.out.println("COSC322Test created for user: " + userName); // DEBUG
+        System.out.println("COSC322Test created for user: " + userName);
     }
 
     @Override
     public void onLogin() {
         userName = gameClient.getUserName();
-        System.out.println("Logged in successfully as: " + userName); // DEBUG
+        System.out.println("Logged in successfully as: " + userName);
 
         if (gamegui != null) {
             gamegui.setRoomInformation(gameClient.getRoomList());
@@ -70,17 +68,17 @@ public class COSC322Test extends GamePlayer {
 
     @Override
     public boolean handleGameMessage(String messageType, Map<String, Object> msgDetails) {
-        System.out.println("\n========== GAME MESSAGE RECEIVED =========="); // DEBUG
-        System.out.println("Type: " + messageType); // DEBUG
-        System.out.println("Details: " + msgDetails); // DEBUG
+        System.out.println("\n========== GAME MESSAGE RECEIVED ==========");
+        System.out.println("Type: " + messageType);
+        System.out.println("Details: " + msgDetails);
 
         if (messageType.equals(GameMessage.GAME_ACTION_START)) {
             String white = (String) msgDetails.get("player-white");
             String black = (String) msgDetails.get("player-black");
 
-            System.out.println("Logged in as: " + userName); // DEBUG
-            System.out.println("White player: " + white);   // DEBUG
-            System.out.println("Black player: " + black);   // DEBUG
+            System.out.println("Logged in as: " + userName);
+            System.out.println("White player: " + white);
+            System.out.println("Black player: " + black);
 
             if (userName != null && userName.equals(white)) {
                 myPlayer = AI_AmazonGame.WHITE;
@@ -96,9 +94,9 @@ public class COSC322Test extends GamePlayer {
 
             minimaxAI = new Minimax(AI, myPlayer);
 
-            // Black starts first
-            if (myPlayer == AI_AmazonGame.BLACK) {
-                System.out.println("Making opening move as WHITE...");
+            if (myPlayer == STARTING_PLAYER) {
+                System.out.println("Making opening move as "
+                        + (myPlayer == AI_AmazonGame.WHITE ? "WHITE" : "BLACK") + "...");
                 sendBestMove();
             }
         }
@@ -121,7 +119,7 @@ public class COSC322Test extends GamePlayer {
 
         else if (messageType.equals(GameMessage.GAME_ACTION_MOVE)) {
             if (myPlayer == 0) {
-                System.out.println("ERROR: myPlayer is still 0, cannot process opponent move properly.");
+                System.out.println("ERROR: myPlayer is still 0.");
                 return true;
             }
 
@@ -133,32 +131,36 @@ public class COSC322Test extends GamePlayer {
                 (ArrayList<Integer>) msgDetails.get(AmazonsGameMessage.ARROW_POS);
 
             if (queenCurr == null || queenNext == null || arrowPos == null) {
-                System.out.println("ERROR: Move message missing one or more move components.");
+                System.out.println("ERROR: Move message missing one or more components.");
                 return true;
             }
 
-            System.out.println("QCurr: " + queenCurr); // DEBUG
-            System.out.println("QNew: " + queenNext); // DEBUG
-            System.out.println("Arrow: " + arrowPos); // DEBUG
-
-            int opponent = (myPlayer == AI_AmazonGame.WHITE)
-                    ? AI_AmazonGame.BLACK
-                    : AI_AmazonGame.WHITE;
-
-            AI_AmazonGame.Move opponentMove = new AI_AmazonGame.Move(
+            AI_AmazonGame.Move incomingMove = new AI_AmazonGame.Move(
                 new int[]{queenCurr.get(0), queenCurr.get(1)},
                 new int[]{queenNext.get(0), queenNext.get(1)},
                 new int[]{arrowPos.get(0), arrowPos.get(1)}
             );
 
-            // CHANGED: safer because AI.applyMove now validates legality
-            AI.applyMove(AI.getBoard(), opponentMove, opponent);
+            System.out.println("Incoming move: " + incomingMove);
+
+            int opponent = (myPlayer == AI_AmazonGame.WHITE)
+                    ? AI_AmazonGame.BLACK
+                    : AI_AmazonGame.WHITE;
+
+            // Ignore my own echoed move if the server sends it back
+            if (sameMove(incomingMove, lastSentMove)) {
+                System.out.println("Received my own echoed move from server. Ignoring.");
+                lastSentMove = null;
+                return true;
+            }
+
+            AI.applyMove(AI.getBoard(), incomingMove, opponent);
 
             if (gamegui != null) {
                 gamegui.updateGameState(msgDetails);
             }
 
-            System.out.println("Opponent moved: " + opponentMove);
+            System.out.println("Opponent moved: " + incomingMove);
             System.out.println("Computing my response...");
             sendBestMove();
         }
@@ -166,12 +168,9 @@ public class COSC322Test extends GamePlayer {
         return true;
     }
 
-    /**
-     * Compute and send the best move
-     */
     private void sendBestMove() {
         if (minimaxAI == null) {
-            System.out.println("ERROR: minimaxAI is null. Cannot send move.");
+            System.out.println("ERROR: minimaxAI is null.");
             return;
         }
 
@@ -195,10 +194,10 @@ public class COSC322Test extends GamePlayer {
         arrow.add(bestMove.arrow[0]);
         arrow.add(bestMove.arrow[1]);
 
-        // CHANGED: update internal board first
         AI.applyMove(AI.getBoard(), bestMove, myPlayer);
 
-        // ADDED: update our own GUI too, otherwise board visuals desync
+        lastSentMove = bestMove;
+
         if (gamegui != null) {
             Map<String, Object> myMove = new HashMap<>();
             myMove.put(AmazonsGameMessage.QUEEN_POS_CURR, queenFrom);
@@ -219,6 +218,17 @@ public class COSC322Test extends GamePlayer {
         }
     }
 
+    private boolean sameMove(AI_AmazonGame.Move a, AI_AmazonGame.Move b) {
+        if (a == null || b == null) return false;
+
+        return a.queenPast[0] == b.queenPast[0]
+            && a.queenPast[1] == b.queenPast[1]
+            && a.queenFuture[0] == b.queenFuture[0]
+            && a.queenFuture[1] == b.queenFuture[1]
+            && a.arrow[0] == b.arrow[0]
+            && a.arrow[1] == b.arrow[1];
+    }
+
     @Override
     public String userName() {
         return userName;
@@ -236,8 +246,7 @@ public class COSC322Test extends GamePlayer {
 
     @Override
     public void connect() {
-        System.out.println("Connecting to game server as " + userName + "..."); // DEBUG
+        System.out.println("Connecting to game server as " + userName + "...");
         gameClient = new GameClient(userName, passwd, this);
     }
-
 }

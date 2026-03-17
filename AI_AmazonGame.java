@@ -1,51 +1,49 @@
 package ubc.cosc322;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 
-
 public class AI_AmazonGame {
 
-    // Cell content constants — used throughout instead of raw integers for clarity
-    public static final int EMPTY = 0; // unoccupied cell
-    public static final int WHITE = 1; // Player 1's queen
-    public static final int BLACK = 2; // Player 2's queen
-    public static final int ARROW = 3; // fired arrow (permanently blocks the cell)
+    public static final int EMPTY = 0;
 
-    // The server sends an 11x11 grid where row/col 0 is padding — real board is 1..10
-    int Board_size = 11;
 
-    // The 2D board array — board[row][col] holds one of the four constants above
-    int[][] board;
+    public static final int BLACK = 1;
+    public static final int WHITE = 2;
+
+    public static final int ARROW = 3;
+
+    private static final int BOARD_SIZE = 11;
+
+    private int[][] board;
 
     public AI_AmazonGame() {
-        board = new int[Board_size][Board_size];
+        board = new int[BOARD_SIZE][BOARD_SIZE];
     }
 
-    /** Returns a direct reference to the live board — used by Minimax and the client. */
     public int[][] getBoard() {
         return board;
     }
 
-    /**
-     * Converts to 2D board array.
-     * The server sends row-major order: index = row * 11 + col.
-     */
     public void updateBoard(ArrayList<Integer> gamePosition) {
-        for (int i = 0; i < Board_size; i++) {
-            for (int j = 0; j < Board_size; j++) {
-                board[i][j] = gamePosition.get(i * Board_size + j);
+        if (gamePosition == null) {
+            throw new IllegalArgumentException("gamePosition cannot be null");
+        }
+
+        if (gamePosition.size() != BOARD_SIZE * BOARD_SIZE) {
+            throw new IllegalArgumentException(
+                "Expected " + (BOARD_SIZE * BOARD_SIZE) + " board entries, got " + gamePosition.size()
+            );
+        }
+
+        for (int i = 0; i < BOARD_SIZE; i++) {
+            for (int j = 0; j < BOARD_SIZE; j++) {
+                board[i][j] = gamePosition.get(i * BOARD_SIZE + j);
             }
         }
-    }
-
-    
-    public void applyMove(int[][] state, Move m, int player) {
-        state[m.queenPast[0]][m.queenPast[1]]     = EMPTY;  // vacate origin
-        state[m.queenFuture[0]][m.queenFuture[1]] = player; // land queen
-        state[m.arrow[0]][m.arrow[1]]             = ARROW;  // block arrow cell
     }
 
     public static class Move {
@@ -54,12 +52,11 @@ public class AI_AmazonGame {
         int[] arrow;
 
         public Move(int[] queenPast, int[] queenFuture, int[] arrow) {
-            this.queenPast   = queenPast;
+            this.queenPast = queenPast;
             this.queenFuture = queenFuture;
-            this.arrow       = arrow;
+            this.arrow = arrow;
         }
 
-        /** Human-readable form used in debug output and error messages. */
         @Override
         public String toString() {
             return "Q(" + queenPast[0] + "," + queenPast[1] + ")"
@@ -68,144 +65,267 @@ public class AI_AmazonGame {
         }
     }
 
- 
     public static final int[][] DIRECTIONS = {
-        {-1,  0}, { 1,  0},  // up, down
-        { 0, -1}, { 0,  1},  // left, right
-        {-1, -1}, {-1,  1},  // diagonal: up-left, up-right
-        { 1, -1}, { 1,  1}   // diagonal: down-left, down-right
+        {-1,  0}, {1,  0},
+        { 0, -1}, {0,  1},
+        {-1, -1}, {-1, 1},
+        { 1, -1}, {1,  1}
     };
 
-    
+    public boolean insideBoard(int row, int col) {
+        return row >= 1 && row < BOARD_SIZE && col >= 1 && col < BOARD_SIZE;
+    }
+
+    public int[][] copyBoard(int[][] original) {
+        int[][] copy = new int[BOARD_SIZE][BOARD_SIZE];
+        for (int i = 0; i < BOARD_SIZE; i++) {
+            System.arraycopy(original[i], 0, copy[i], 0, BOARD_SIZE);
+        }
+        return copy;
+    }
+
+    public void applyMove(int[][] state, Move m, int player) {
+        if (!isLegalMove(state, m, player)) {
+            throw new IllegalArgumentException("Illegal move attempted: " + m);
+        }
+
+        state[m.queenPast[0]][m.queenPast[1]] = EMPTY;
+        state[m.queenFuture[0]][m.queenFuture[1]] = player;
+        state[m.arrow[0]][m.arrow[1]] = ARROW;
+    }
+
+    public boolean isLegalMove(int[][] state, Move m, int player) {
+        if (state == null || m == null) return false;
+
+        int r1 = m.queenPast[0];
+        int c1 = m.queenPast[1];
+        int r2 = m.queenFuture[0];
+        int c2 = m.queenFuture[1];
+        int ar = m.arrow[0];
+        int ac = m.arrow[1];
+
+        if (!insideBoard(r1, c1) || !insideBoard(r2, c2) || !insideBoard(ar, ac)) {
+            return false;
+        }
+
+        if (state[r1][c1] != player) {
+            return false;
+        }
+
+        if (state[r2][c2] != EMPTY) {
+            return false;
+        }
+
+        if (!isStraightOrDiagonal(r1, c1, r2, c2)) {
+            return false;
+        }
+
+        if (!isClearPath(state, r1, c1, r2, c2)) {
+            return false;
+        }
+
+        int[][] temp = copyBoard(state);
+        temp[r1][c1] = EMPTY;
+        temp[r2][c2] = player;
+
+        if (temp[ar][ac] != EMPTY && !(ar == r1 && ac == c1)) {
+            return false;
+        }
+
+        if (!isStraightOrDiagonal(r2, c2, ar, ac)) {
+            return false;
+        }
+
+        if (!isClearPath(temp, r2, c2, ar, ac)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean isStraightOrDiagonal(int r1, int c1, int r2, int c2) {
+        int dr = Math.abs(r2 - r1);
+        int dc = Math.abs(c2 - c1);
+        return (r1 == r2) || (c1 == c2) || (dr == dc);
+    }
+
+    private boolean isClearPath(int[][] state, int r1, int c1, int r2, int c2) {
+        int dr = Integer.compare(r2, r1);
+        int dc = Integer.compare(c2, c1);
+
+        int cr = r1 + dr;
+        int cc = c1 + dc;
+
+        while (cr != r2 || cc != c2) {
+            if (!insideBoard(cr, cc)) return false;
+            if (state[cr][cc] != EMPTY) return false;
+            cr += dr;
+            cc += dc;
+        }
+
+        return true;
+    }
+
     public List<Move> generateMoves(int[][] state, int player) {
         List<Move> moves = new ArrayList<>();
 
-        // Scan every cell on the real board (indices 1..10, skipping the padding row/col 0)
-        for (int r = 1; r < Board_size; r++) {
-            for (int c = 1; c < Board_size; c++) {
-
-                // Only process cells that hold one of our queens
+        for (int r = 1; r < BOARD_SIZE; r++) {
+            for (int c = 1; c < BOARD_SIZE; c++) {
                 if (state[r][c] != player) continue;
 
-                // Try sliding the queen in each of the 8 directions
                 for (int[] d : DIRECTIONS) {
                     int newrow = r + d[0];
                     int newcol = c + d[1];
 
-                    // Keep going until we hit a wall or an occupied cell
                     while (insideBoard(newrow, newcol) && state[newrow][newcol] == EMPTY) {
-
-                        // From this queen destination, try firing the arrow in all 8 directions
                         for (int[] arrowdirection : DIRECTIONS) {
                             int arrowrow = newrow + arrowdirection[0];
                             int arrowcol = newcol + arrowdirection[1];
 
-                            // Arrow slides like a queen — can also pass through the queen's vacated origin
                             while (insideBoard(arrowrow, arrowcol)
-                                    && (state[arrowrow][arrowcol] == EMPTY
-                                        || (arrowrow == r && arrowcol == c))) { // origin is now empty
+                                    && (state[arrowrow][arrowcol] == EMPTY || (arrowrow == r && arrowcol == c))) {
 
-                                // This combination of queen move + arrow position is a valid move
-                                moves.add(new Move(
-                                    new int[]{r, c},            // queen origin
-                                    new int[]{newrow, newcol},  // queen destination
-                                    new int[]{arrowrow, arrowcol} // arrow landing
-                                ));
+                                Move move = new Move(
+                                    new int[]{r, c},
+                                    new int[]{newrow, newcol},
+                                    new int[]{arrowrow, arrowcol}
+                                );
 
-                                // Continue arrow in the same direction
+                                if (isLegalMove(state, move, player)) {
+                                    moves.add(move);
+                                }
+
                                 arrowrow += arrowdirection[0];
                                 arrowcol += arrowdirection[1];
                             }
                         }
 
-                        // Continue queen in the same direction
                         newrow += d[0];
                         newcol += d[1];
                     }
                 }
             }
         }
+
         return moves;
     }
 
-    public int[][] copyBoard(int[][] original) {
-        int[][] copy = new int[Board_size][Board_size];
-        for (int i = 0; i < Board_size; i++) {
-            // arraycopy is faster than a manual loop for row-by-row copying
-            System.arraycopy(original[i], 0, copy[i], 0, Board_size);
-        }
-        return copy;
-    }
-
-    /**
-     * Returns true if (row, col) is within the playable board area.
-     * Starts at 1 (not 0) because index 0 is padding sent by the server
-     * and does not represent a real cell.
-     */
-    public boolean insideBoard(int row, int col) {
-        return row >= 1 && row < Board_size && col >= 1 && col < Board_size;
-    }
-
-   
     public int evaluateBoard(int[][] state, int myPlayer) {
+        int opponent = (myPlayer == WHITE) ? BLACK : WHITE;
 
-        // Determine the opponent based on our color
-        int opponent;
-        if (myPlayer == WHITE) {
-            opponent = BLACK;
-        } else {
-            opponent = WHITE;
-        }
-
-        // BFS from all of each player's queens simultaneously
-        // Each cell gets the minimum queen-move distance from that player's queens
-        int[][] myDist  = bfsDistances(state, myPlayer);
+        int[][] myDist = bfsDistances(state, myPlayer);
         int[][] oppDist = bfsDistances(state, opponent);
 
-        int myTerritory  = 0; // cells we reach before the opponent
-        int oppTerritory = 0; // cells the opponent reaches before us
-        int mobilityMy   = 0; // cells directly adjacent (distance 1) to our queens
-        int mobilityOpp  = 0; // cells directly adjacent (distance 1) to opponent's queens
+        int myTerritory = 0;
+        int oppTerritory = 0;
 
-        // Compare BFS distances cell by cell to assign territory and count mobility
-        for (int r = 1; r < Board_size; r++) {
-            for (int c = 1; c < Board_size; c++) {
-                int mydistance  = myDist[r][c];
-                int oppdistance = oppDist[r][c];
+        for (int r = 1; r < BOARD_SIZE; r++) {
+            for (int c = 1; c < BOARD_SIZE; c++) {
+                if (state[r][c] != EMPTY) continue;
 
-                // Whoever can reach this cell in fewer moves "owns" it
-                if (mydistance < oppdistance) {
+                int mydistance = myDist[r][c];
+                int opponentdistance = oppDist[r][c];
+
+                if (mydistance < opponentdistance) {
                     myTerritory++;
-                } else if (oppdistance < mydistance) {
+                } else if (opponentdistance < mydistance) {
                     oppTerritory++;
                 }
-
-                // Distance 1 means directly reachable in one queen move — counts as mobility
-                if (mydistance == 1)  mobilityMy++;
-                if (oppdistance == 1) mobilityOpp++;
             }
         }
 
-        // Combine factors — territory is weighted higher because it determines
-        // long-term winning chances, while mobility is a more immediate indicator
-        return 2 * (myTerritory - oppTerritory)
-             + 1 * (mobilityMy  - mobilityOpp);
+        int myFreedom = queenFreedom(state, myPlayer);
+        int oppFreedom = queenFreedom(state, opponent);
+
+        int myCenter = centerControl(state, myPlayer);
+        int oppCenter = centerControl(state, opponent);
+
+        int myTrapped = trappedQueens(state, myPlayer);
+        int oppTrapped = trappedQueens(state, opponent);
+
+        return 4 * (myTerritory - oppTerritory)
+             + 2 * (myFreedom - oppFreedom)
+             + 1 * (myCenter - oppCenter)
+             - 12 * (myTrapped - oppTrapped);
     }
 
-    
-    private int[][] bfsDistances(int[][] state, int player) {
+    private int queenFreedom(int[][] state, int player) {
+        int total = 0;
 
-        // Initialize all distances to infinity — will be overwritten during BFS
-        int[][] dist = new int[Board_size][Board_size];
+        for (int r = 1; r < BOARD_SIZE; r++) {
+            for (int c = 1; c < BOARD_SIZE; c++) {
+                if (state[r][c] != player) continue;
+
+                for (int[] d : DIRECTIONS) {
+                    int nr = r + d[0];
+                    int nc = c + d[1];
+
+                    while (insideBoard(nr, nc) && state[nr][nc] == EMPTY) {
+                        total++;
+                        nr += d[0];
+                        nc += d[1];
+                    }
+                }
+            }
+        }
+
+        return total;
+    }
+
+    private int centerControl(int[][] state, int player) {
+        int score = 0;
+
+        for (int r = 1; r < BOARD_SIZE; r++) {
+            for (int c = 1; c < BOARD_SIZE; c++) {
+                if (state[r][c] != player) continue;
+
+                int dist = Math.abs(r - 5) + Math.abs(c - 5);
+                score += (10 - dist);
+            }
+        }
+
+        return score;
+    }
+
+    private int trappedQueens(int[][] state, int player) {
+        int trapped = 0;
+
+        for (int r = 1; r < BOARD_SIZE; r++) {
+            for (int c = 1; c < BOARD_SIZE; c++) {
+                if (state[r][c] != player) continue;
+
+                boolean canMove = false;
+
+                for (int[] d : DIRECTIONS) {
+                    int nr = r + d[0];
+                    int nc = c + d[1];
+
+                    if (insideBoard(nr, nc) && state[nr][nc] == EMPTY) {
+                        canMove = true;
+                        break;
+                    }
+                }
+
+                if (!canMove) {
+                    trapped++;
+                }
+            }
+        }
+
+        return trapped;
+    }
+
+    private int[][] bfsDistances(int[][] state, int player) {
+        int[][] dist = new int[BOARD_SIZE][BOARD_SIZE];
         for (int[] row : dist) {
-            java.util.Arrays.fill(row, Integer.MAX_VALUE);
+            Arrays.fill(row, Integer.MAX_VALUE);
         }
 
         Queue<int[]> queue = new LinkedList<>();
+        boolean[][] visited = new boolean[BOARD_SIZE][BOARD_SIZE];
 
-        // Seed the BFS from every queen belonging to this player (distance = 0)
-        for (int r = 1; r < Board_size; r++) {
-            for (int c = 1; c < Board_size; c++) {
+        for (int r = 1; r < BOARD_SIZE; r++) {
+            for (int c = 1; c < BOARD_SIZE; c++) {
                 if (state[r][c] == player) {
                     dist[r][c] = 0;
                     queue.add(new int[]{r, c});
@@ -213,30 +333,22 @@ public class AI_AmazonGame {
             }
         }
 
-        // visited array prevents re-processing cells that are already settled
-        boolean[][] visited = new boolean[Board_size][Board_size];
-
         while (!queue.isEmpty()) {
             int[] currentPosition = queue.poll();
             int currentRow = currentPosition[0];
             int currentCol = currentPosition[1];
 
-            // Skip if this cell's shortest distance was already finalized
             if (visited[currentRow][currentCol]) {
                 continue;
             }
             visited[currentRow][currentCol] = true;
 
-            // From this cell, expand in all 8 directions (queen-slide movement)
             for (int[] directions : DIRECTIONS) {
                 int nextRow = currentRow + directions[0];
                 int nextCol = currentCol + directions[1];
 
-                // Keep going in this direction while the path is clear
                 while (insideBoard(nextRow, nextCol) && state[nextRow][nextCol] == EMPTY) {
                     int newDist = dist[currentRow][currentCol] + 1;
-
-                    // Only enqueue if we found a shorter path to this cell
                     if (newDist < dist[nextRow][nextCol]) {
                         dist[nextRow][nextCol] = newDist;
                         queue.add(new int[]{nextRow, nextCol});
