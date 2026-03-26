@@ -82,10 +82,10 @@ public class COSC322Test extends GamePlayer {
 
             if (userName != null && userName.equals(white)) {
                 myPlayer = AI_AmazonGame.WHITE;
-                System.out.println("I am WHITE (player 1)");
+                System.out.println("I am WHITE (player 2)");
             } else if (userName != null && userName.equals(black)) {
                 myPlayer = AI_AmazonGame.BLACK;
-                System.out.println("I am BLACK (player 2)");
+                System.out.println("I am BLACK (player 1)");
             } else {
                 myPlayer = 0;
                 System.out.println("ERROR: My username does not match either WHITE or BLACK.");
@@ -147,7 +147,6 @@ public class COSC322Test extends GamePlayer {
                     ? AI_AmazonGame.BLACK
                     : AI_AmazonGame.WHITE;
 
-            // Ignore my own echoed move if the server sends it back
             if (sameMove(incomingMove, lastSentMove)) {
                 System.out.println("Received my own echoed move from server. Ignoring.");
                 lastSentMove = null;
