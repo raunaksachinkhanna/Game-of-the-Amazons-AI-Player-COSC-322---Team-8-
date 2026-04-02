@@ -19,7 +19,7 @@ public class AI_AmazonGame {
 
     private static final int WIN_SCORE  =  1_000_000;
     private static final int LOSS_SCORE = -1_000_000;
-    // The 2D board array — board[row][col] holds one of the four constants above
+    // The 2D board array — board[row][col] 
     int[][] board;
     public enum QueenRole {
         AGGRESSIVE,
@@ -46,15 +46,14 @@ public class AI_AmazonGame {
         board = new int[BOARD_SIZE][BOARD_SIZE];
     }
 
-    /** Returns a direct reference to the live board — used by Minimax and the client. */
+    // Returns a direct reference to the live board — used by Minimax and the client. */
     public int[][] getBoard() {
         return board;
     }
 
-    /**
-     * Converts to 2D board array.
-     * The server sends row-major order: index = row * 11 + col.
-     */
+    //Converts to 2D board array.
+    // index = row * 11 + col.
+
     public void updateBoard(ArrayList<Integer> gamePosition) {
     	 if (gamePosition == null) {
              throw new IllegalArgumentException("gamePosition cannot be null");
@@ -90,7 +89,6 @@ public class AI_AmazonGame {
             this.arrow       = arrow;
         }
 
-        /** Human-readable form used in debug output and error messages. */
         @Override
         public String toString() {
             return "Q(" + queenPast[0] + "," + queenPast[1] + ")"
@@ -111,7 +109,7 @@ public class AI_AmazonGame {
     public List<Move> generateMoves(int[][] state, int player) {
         List<Move> moves = new ArrayList<>();
 
-        // Scan every cell on the real board (indices 1..10, skipping the padding row/col 0)
+        // Scan every cell on the real board 
         for (int r = 1; r < BOARD_SIZE; r++) {
             for (int c = 1; c < BOARD_SIZE; c++) {
 
@@ -162,17 +160,11 @@ public class AI_AmazonGame {
     public int[][] copyBoard(int[][] original) {
         int[][] copy = new int[BOARD_SIZE][BOARD_SIZE];
         for (int i = 0; i < BOARD_SIZE; i++) {
-            // arraycopy is faster than a manual loop for row-by-row copying
             System.arraycopy(original[i], 0, copy[i], 0, BOARD_SIZE);
         }
         return copy;
     }
 
-    /**
-     * Returns true if (row, col) is within the playable board area.
-     * Starts at 1 (not 0) because index 0 is padding sent by the server
-     * and does not represent a real cell.
-     */
     public boolean insideBoard(int row, int col) {
         return row >= 1 && row < BOARD_SIZE && col >= 1 && col < BOARD_SIZE;
     }
@@ -244,6 +236,9 @@ public class AI_AmazonGame {
             int myTrapped = trappedQueens(state, myPlayer);
             int oppTrapped = trappedQueens(state, opponent);
 
+            //Idea to give priorities 
+            //We are looking to escape if needed more value
+            //attack but control center is important
             int globalScore = 4 * (myTerritory - oppTerritory)
                  + 2 * (myFreedom - oppFreedom)
                  + 1 * (myCenter - oppCenter)
@@ -298,7 +293,7 @@ public class AI_AmazonGame {
 					if (state[r][c] != myPlayer) continue;
 			
 			QueenRole role = assignRole(state, r, c, myDist, oppDist);
-			
+			//Not sure we might need to change things 
 				switch (role) {
 				case AGGRESSIVE:
 				  score += aggressiveBonus(state, r, c, oppDist);
@@ -307,13 +302,12 @@ public class AI_AmazonGame {
 				  score += defensiveBonus(state, r, c);
 				  break;
 				case NEUTRAL:
-				  // no adjustment
 				  break;
 					}
 				}
 			}
 			
-			// Score opponent queens — defensive opponents are good for us
+			// Score opponent queens, defensive opponents are good for us
 		for (int r = 1; r < BOARD_SIZE; r++) {
 			for (int c = 1; c < BOARD_SIZE; c++) {
 				if (state[r][c] != opponent) continue;
@@ -321,7 +315,7 @@ public class AI_AmazonGame {
 		QueenRole oppRole = assignRole(state, r, c, oppDist, myDist);
 		
 			if (oppRole == QueenRole.DEFENSIVE) {
-			// Opponent queen is cornered — treat it as a bonus for us
+			// Opponent queen is cornered treat it as a bonus for us
 			score += DEFENSIVE_STUCK_PENALTY;
 				}
 			}
@@ -329,6 +323,8 @@ public class AI_AmazonGame {
 			
 			return score;
 		}
+    //Next methods help to give pieces a better movement depending on situation
+    //Aggressive, defensive, center, escape or trapped queen
     private QueenRole assignRole(int[][] state, int r, int c,
             int[][] myDist, int[][] oppDist) {
 			// Count reachable empty cells in one queen move
@@ -347,11 +343,11 @@ public class AI_AmazonGame {
 			// A high number means opponent queens are close and threatening
 			int pressure = 0;
 			for (int pr = 1; pr < BOARD_SIZE; pr++) {
-				for (int pc = 1; pc < BOARD_SIZE; pc++) {
-					if (oppDist[pr][pc] != Integer.MAX_VALUE && oppDist[pr][pc] <= 3) {
-						pressure++;
-					}
-				}
+			    for (int pc = 1; pc < BOARD_SIZE; pc++) {
+			        if (oppDist[pr][pc] != Integer.MAX_VALUE && oppDist[pr][pc] <= 3) {
+			            pressure++;
+			        }
+			    }
 			}
 			
 			double ratio = (double) freedom / (pressure + 1);
@@ -369,7 +365,7 @@ public class AI_AmazonGame {
             int nc = queenCol + d[1];
 
             while (insideBoard(nr, nc) && state[nr][nc] == EMPTY) {
-                // Cell directly adjacent to an opponent queen → high-value arrow target
+                // Cell directly adjacent to an opponent queen 
                 if (oppDist[nr][nc] == 1) {
                     bonus += AGGRESSIVE_BONUS_PER_BLOCKED;
                 }
@@ -396,7 +392,7 @@ public class AI_AmazonGame {
         }
 
         if (escapeRoutes <= 2) {
-            // Nearly trapped — penalize to encourage escaping
+            // Nearly trapped, escape
             return -DEFENSIVE_STUCK_PENALTY;
         }
 
@@ -409,15 +405,17 @@ public class AI_AmazonGame {
         for (int r = 1; r < BOARD_SIZE; r++) {
             for (int c = 1; c < BOARD_SIZE; c++) {
                 if (state[r][c] != player) continue;
-
-                int dist = Math.abs(r - 5) + Math.abs(c - 5);
+                int rowDist = Math.min(Math.abs(r - 5), Math.abs(r - 6));
+                int colDist = Math.min(Math.abs(c - 5), Math.abs(c - 6));
+                int dist = rowDist + colDist;
                 score += (10 - dist);
             }
         }
 
         return score;
     }
-    
+    //Escape idea
+    //we need to make sure there is no moves to start moving other piece and take all movements
     private int trappedQueens(int[][] state, int player) {
         int trapped = 0;
 
@@ -467,6 +465,7 @@ public class AI_AmazonGame {
 
         return total;
     }
+    //Traditional
     private int[][] bfsDistances(int[][] state, int player) {
         int[][] dist = new int[BOARD_SIZE][BOARD_SIZE];
         for (int[] row : dist) {
